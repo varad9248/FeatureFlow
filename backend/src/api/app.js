@@ -11,16 +11,28 @@ import usageRoutes from '../modules/usage/usage.routes.js';
 /**
  * Initializes and configures the Express application.
  * Sets up global middleware including CORS, security headers, and JSON parsing.
- * * @function configureApp
+ * @function configureApp
  * @returns {import('express').Application} The configured Express application instance.
  */
 const configureApp = () => {
     const app = express();
 
     // Global Middleware
-    app.use(helmet()); 
-    app.use(cors()); 
-    app.use(express.json()); 
+    app.use(helmet());
+
+    // FIX: Restrict CORS to known origins only (was wildcard before - security risk!)
+    app.use(cors({
+        origin: [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://localhost:3002',
+            process.env.FRONTEND_URL
+        ].filter(Boolean),
+        methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    }));
+
+    app.use(express.json());
 
     // Health Check Endpoint
     app.get('/health', (req, res) => {

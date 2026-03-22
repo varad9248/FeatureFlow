@@ -28,17 +28,28 @@ jobs:
         with:
           node-version: '20'
 
-      # Step 3 - Test backend builds fine
+      # Step 3 - Install backend dependencies
       - name: Install backend dependencies
         working-directory: ./backend
         run: npm ci
 
-      # Step 4 - Test frontend builds fine
+      # Step 4 - Run backend tests ✅ THIS WAS MISSING - BUG FIXED!
+      - name: Run backend tests
+        working-directory: ./backend
+        run: npm test
+        env:
+          SUPABASE_URL: https://fake-test-url.supabase.co
+          SUPABASE_ANON_KEY: fake-test-key-for-testing-only
+          UPSTASH_REDIS_REST_URL: https://fake-redis.upstash.io
+          UPSTASH_REDIS_REST_TOKEN: fake-redis-token
+          DATABASE_URL: postgres://fake:fake@localhost:5432/fakedb
+
+      # Step 5 - Install frontend dependencies
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm ci
 
-      # Step 5 - Build frontend (catch any errors)
+      # Step 6 - Build frontend (catch any errors)
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
@@ -48,7 +59,6 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
 
   # JOB 2: DEPLOY BACKEND (only on push to main)
-
   deploy-backend:
     name: Deploy Backend to Render
     runs-on: ubuntu-latest
@@ -91,7 +101,6 @@ jobs:
           curl --fail ${{ secrets.RENDER_BACKEND_URL }}/health || exit 1
 
   # JOB 3: DEPLOY FRONTEND (only on push to main)
-  
   deploy-frontend:
     name: Deploy Frontend to Vercel
     runs-on: ubuntu-latest
@@ -117,3 +126,5 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+```
+

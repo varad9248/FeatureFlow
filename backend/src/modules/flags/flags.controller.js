@@ -4,6 +4,13 @@ import { supabase } from '../../config/supabase.js';
 import { sendEmailNotification } from '../../shared/utils/mailer.js';
 import { broadcastFlagUpdate } from "../../shared/utils/realtime.js";
 
+/**
+ * Creates a new feature flag under a specific project.
+ * @asyncg
+ * @function createFlag
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response object.
+ */
 export const createFlag = async (req, res) => {
     try {
         const { projectId, name, description } = req.body;
@@ -26,6 +33,11 @@ export const createFlag = async (req, res) => {
     }
 };
 
+/**
+ * Retrieves all feature flags for a specific project.
+ * @async
+ * @function getFlagsByProject
+ */
 export const getFlagsByProject = async (req, res) => {
     try {
         const { projectId } = req.params;
@@ -44,11 +56,17 @@ export const getFlagsByProject = async (req, res) => {
     }
 };
 
+/**
+ * Toggles a flag ON or OFF and records the change in the Audit Log.
+ * @async
+ * @function toggleFlag
+ */
 export const toggleFlag = async (req, res) => {
     try {
         const { flagId } = req.params;
-        const userId = req.user.id;
+        const userId = req.user.id; // From requireAuth middleware
 
+        // 1. Fetch the current flag state
         const { data: currentFlag, error: fetchError } = await supabase
             .from('feature_flags')
             .select('*')
@@ -62,6 +80,7 @@ export const toggleFlag = async (req, res) => {
         const newState = !currentFlag.status;
         const actionText = newState ? 'TOGGLED_ON' : 'TOGGLED_OFF';
 
+        // 2. Update the flag status
         const { data: updatedFlag, error: updateError } = await supabase
             .from('feature_flags')
             .update({ status: newState, updated_at: new Date().toISOString() })
@@ -74,9 +93,10 @@ export const toggleFlag = async (req, res) => {
         const cacheKey = `project_flags_rules:${currentFlag.project_id}`;
         await redis.del(cacheKey);
 
+        // Broadcast the real-time event to connected SDKs
         await broadcastFlagUpdate(currentFlag.project_id);
 
-        // FIX: Audit log failure now returns error instead of failing silently
+        // 3. Write to the Audit Log
         const { error: auditError } = await supabase
             .from('audit_logs')
             .insert([{
@@ -87,11 +107,9 @@ export const toggleFlag = async (req, res) => {
                 new_state: { status: newState }
             }]);
 
-        if (auditError) {
-            console.error('Audit Log Error:', auditError);
-            return res.status(500).json({ error: 'Flag toggled but audit log failed. Please contact support.' });
-        }
+        if (auditError) console.error('Audit Log Error:', auditError); 
 
+        // Send email notification
         const userEmail = req.user.email;
         await sendEmailNotification(
             userEmail,
@@ -105,11 +123,19 @@ export const toggleFlag = async (req, res) => {
     }
 };
 
+/**
+ * Adds a new targeting rule to a specific feature flag.
+ * @async
+ * @function addTargetingRule
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response object.
+ */
 export const addTargetingRule = async (req, res) => {
     try {
         const { flagId } = req.params;
         const { attribute, operator, value, rolloutPercentage } = req.body;
 
+        // 1. Verify flag exists and grab the project_id for cache invalidation
         const { data: flag, error: flagError } = await supabase
             .from('feature_flags')
             .select('project_id')
@@ -120,6 +146,7 @@ export const addTargetingRule = async (req, res) => {
             return res.status(404).json({ error: 'Feature flag not found.' });
         }
 
+        // 2. Insert the targeting rule
         const { data: rule, error: ruleError } = await supabase
             .from('targeting_rules')
             .insert([{
@@ -134,9 +161,11 @@ export const addTargetingRule = async (req, res) => {
 
         if (ruleError) throw ruleError;
 
+        // 3. Invalidate Redis Cache so the SDK fetches the new rules instantly
         const cacheKey = `project_flags_rules:${flag.project_id}`;
         await redis.del(cacheKey);
 
+        // Broadcast the real-time event
         await broadcastFlagUpdate(flag.project_id);
 
         res.status(201).json({ message: 'Targeting rule added successfully', data: rule });
@@ -145,10 +174,16 @@ export const addTargetingRule = async (req, res) => {
     }
 };
 
+/**
+ * Removes a targeting rule from a feature flag.
+ * @async
+ * @function removeTargetingRule
+ */
 export const removeTargetingRule = async (req, res) => {
     try {
         const { flagId, ruleId } = req.params;
 
+        // 1. Get project_id for cache invalidation before deleting
         const { data: flag, error: flagError } = await supabase
             .from('feature_flags')
             .select('project_id')
@@ -157,6 +192,7 @@ export const removeTargetingRule = async (req, res) => {
 
         if (flagError || !flag) return res.status(404).json({ error: 'Flag not found.' });
 
+        // 2. Delete the rule
         const { error: deleteError } = await supabase
             .from('targeting_rules')
             .delete()
@@ -164,9 +200,11 @@ export const removeTargetingRule = async (req, res) => {
 
         if (deleteError) throw deleteError;
 
+        // 3. Invalidate Redis Cache
         const cacheKey = `project_flags_rules:${flag.project_id}`;
         await redis.del(cacheKey);
 
+        // Broadcast the real-time event
         await broadcastFlagUpdate(flag.project_id);
 
         res.status(200).json({ message: 'Targeting rule removed successfully' });
@@ -175,11 +213,20 @@ export const removeTargetingRule = async (req, res) => {
     }
 };
 
+
+/**
+ * Reverts a feature flag to its previous state using the most recent audit log entry.
+ * @async
+ * @function rollbackFlag
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response object.
+ */
 export const rollbackFlag = async (req, res) => {
     try {
         const { flagId } = req.params;
         const userId = req.user.id;
 
+        // 1. Fetch the most recent audit log entry for this flag
         const { data: latestLog, error: logError } = await supabase
             .from('audit_logs')
             .select('*')
@@ -198,6 +245,7 @@ export const rollbackFlag = async (req, res) => {
 
         const targetStatus = latestLog.previous_state.status;
 
+        // 2. Fetch the project_id for cache invalidation
         const { data: flag, error: flagError } = await supabase
             .from('feature_flags')
             .select('project_id, status')
@@ -210,6 +258,7 @@ export const rollbackFlag = async (req, res) => {
             return res.status(400).json({ message: 'Flag is already in the target state.' });
         }
 
+        // 3. Update the flag back to its previous state
         const { data: updatedFlag, error: updateError } = await supabase
             .from('feature_flags')
             .update({ status: targetStatus, updated_at: new Date().toISOString() })
@@ -219,6 +268,7 @@ export const rollbackFlag = async (req, res) => {
 
         if (updateError) throw updateError;
 
+        // 4. Write a new entry to the Audit Log marking this as a ROLLBACK
         await supabase.from('audit_logs').insert([{
             flag_id: flagId,
             user_id: userId,
@@ -227,10 +277,12 @@ export const rollbackFlag = async (req, res) => {
             new_state: { status: targetStatus }
         }]);
 
+        // 5. Invalidate the Redis Cache and Broadcast the Update
         const cacheKey = `project_flags_rules:${flag.project_id}`;
         await redis.del(cacheKey);
         await broadcastFlagUpdate(flag.project_id);
 
+        // Send email notification
         const userEmail = req.user.email;
         await sendEmailNotification(
             userEmail,
@@ -244,10 +296,15 @@ export const rollbackFlag = async (req, res) => {
     }
 };
 
+/**
+ * Schedules a flag to toggle at a specific future date and time.
+ * @async
+ * @function scheduleFlagToggle
+ */
 export const scheduleFlagToggle = async (req, res) => {
     try {
         const { flagId } = req.params;
-        const { targetStatus, scheduledTime } = req.body;
+        const { targetStatus, scheduledTime } = req.body; // scheduledTime should be an ISO string
         const userId = req.user.id;
 
         if (typeof targetStatus !== 'boolean' || !scheduledTime) {
@@ -259,28 +316,37 @@ export const scheduleFlagToggle = async (req, res) => {
             return res.status(400).json({ error: 'Scheduled time must be in the future.' });
         }
 
+        // Send the job to pg-boss with the startAfter configuration
         const userEmail = req.user.email;
-        const jobId = await queue.send('toggle-flag',
-            { flagId, targetStatus, userId, userEmail },
+        const jobId = await queue.send('toggle-flag', 
+            { flagId, targetStatus, userId , userEmail }, 
             { startAfter: date }
         );
 
-        res.status(202).json({
-            message: `Flag toggle scheduled successfully for ${date.toLocaleString()}`,
-            jobId
+        res.status(202).json({ 
+            message: `Flag toggle scheduled successfully for ${date.toLocaleString()}`, 
+            jobId 
         });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to schedule flag.' });
     }
 };
 
+/**
+ * Retrieves a single feature flag and its targeting rules.
+ * @async
+ * @function getFlagById
+ */
 export const getFlagById = async (req, res) => {
     try {
         const { flagId } = req.params;
 
         const { data, error } = await supabase
             .from('feature_flags')
-            .select(`*, targeting_rules (*)`)
+            .select(`
+                *,
+                targeting_rules (*)
+            `)
             .eq('id', flagId)
             .single();
 
@@ -294,13 +360,20 @@ export const getFlagById = async (req, res) => {
     }
 };
 
+
+/**
+ * Retrieves the audit log history for a specific feature flag.
+ * @async
+ * @function getFlagAuditLogs
+ */
 export const getFlagAuditLogs = async (req, res) => {
     try {
         const { flagId } = req.params;
 
         const { data, error } = await supabase
             .from('audit_logs')
-            .select('*')
+            // FIX: Removed the broken join to the auth schema
+            .select('*') 
             .eq('flag_id', flagId)
             .order('created_at', { ascending: false });
 

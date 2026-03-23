@@ -153,13 +153,3 @@ The GitHub Actions pipeline runs automatically on every PR and push:
 - SDK Auth: API Key with ff_live_ prefix
 - All protected routes require Authorization: Bearer token
 
-## Contributors
-
-- varad9248 - Project Lead
-- Shounak-Chavan - DevOps
-- Parthshinde2005 - Developer
-- Shravani-kurkute - QA Engineer
-
-## License
-
-This project is for educational purposes.

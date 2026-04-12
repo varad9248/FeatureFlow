@@ -59,10 +59,10 @@ git clone https://github.com/varad9248/devops-release-flux.git
 cd devops-release-flux
 
 ### 2. Setup Backend
-
+```bash
 cd backend
 npm install
-
+```
 Create backend/.env file:
 
 SUPABASE_URL=your_supabase_url
@@ -74,14 +74,14 @@ PORT=8000
 FRONTEND_URL=http://localhost:3000
 
 Start backend:
-
+```bash
 npm run dev
-
+```
 ### 3. Setup Frontend
-
+```bash
 cd frontend
 npm install
-
+```
 Create frontend/.env.local file:
 
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
@@ -89,13 +89,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_API_URL=http://localhost:8000
 
 Start frontend:
-
+```bash
 npm run dev
-
+```
 ### 4. Run with Docker
-
+```bash
 docker-compose up --build
-
+```
 ## API Endpoints
 
 ### Auth

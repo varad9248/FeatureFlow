@@ -126,18 +126,51 @@ docker-compose up --build
 ## Testing
 
 ### Run Backend Tests
+```bash
 cd backend
 npm test
+```
+
+### Run Backend Unit Tests
+```bash
+cd backend
+npm run test:unit
+```
+
+### Run Backend Integration Tests
+```bash
+cd backend
+npm run test:integration
+```
 
 ### Run Frontend E2E Tests
+```bash
 cd frontend
 npx cypress run
+```
 
-### Test Results
-- Unit Tests: 10 passing
-- Integration Tests: 19 passing
+### Run Frontend Cypress in interactive mode
+```bash
+cd frontend
+npx cypress open
+```
+
+### Recommended Local Testing Workflow
+1. Start backend services:
+   - Ensure `backend/.env` contains valid Supabase, Redis, and database values.
+   - Run `cd backend && npm install && npm run dev`.
+2. Start frontend:
+   - Ensure `frontend/.env.local` contains `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_API_URL`.
+   - Run `cd frontend && npm install && npm run dev`.
+3. Run tests:
+   - `cd backend && npm test`
+   - `cd frontend && npx cypress run`
+
+### Current Test Results
+- Unit Tests: 26 passing
+- Integration Tests: 24 passing
 - Cypress E2E Tests: 21 passing
-- Total: 50 tests all passing
+- Total: 71 tests all passing
 
 ## CI/CD Pipeline
 
